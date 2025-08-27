@@ -1,4 +1,15 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import { 
+  BINARY_PDF_PATTERNS, 
+  FILE_SIZE_LIMITS, 
+  CV_KEYWORDS 
+} from '../utils/constants'
+import { 
+  isValidTextContent, 
+  sanitizeContent, 
+  truncateContent,
+  validateFileSize 
+} from '../utils/fileValidation'
 
 // Configure pdfjs worker - CORREGIDO: Usar versión compatible 3.11.174
 if (typeof window !== 'undefined') {
@@ -19,6 +30,13 @@ export function initializeDocumentExtractorLogger(logger: any) {
   debugLogger.info('Document Extractor logger inicializado', { version: '3.11.174' });
 }
 
+export interface PDFExtractResult {
+  text: string;
+  numPages: number;
+  error?: string;
+  method?: string;
+}
+
 // Función de logging con fallback a console
 function log(level: 'info' | 'warning' | 'error' | 'success', message: string, data?: any) {
   if (debugLogger) {
@@ -28,87 +46,6 @@ function log(level: 'info' | 'warning' | 'error' | 'success', message: string, d
   // Fallback a console del navegador
   const consoleMethod = level === 'error' ? 'error' : level === 'warning' ? 'warn' : 'log';
   console[consoleMethod](`📄 [Document Extractor] ${message}`, data || '');
-}
-
-export interface PDFExtractResult {
-  text: string;
-  numPages: number;
-  error?: string;
-  method?: string;
-}
-
-export function isValidTextContent(content: string): boolean {
-  if (!content || content.trim().length < 10) {
-    log('warning', 'Contenido muy corto o vacío', { length: content?.length || 0 });
-    return false
-  }
-
-  // Patrones que indican código binario PDF
-  const binaryPatterns = [
-    '%PDF-',           // Cabecera PDF
-    '/Type/Catalog',   // Objetos PDF
-    '/Type/Page',      // Páginas PDF
-    'endobj',          // Final de objeto PDF
-    'stream',          // Flujos de datos PDF
-    'endstream',       // Final de flujo PDF
-    '<<',              // Diccionarios PDF
-    '>>',              // Cierre de diccionarios PDF
-    'obj\r\n',         // Objetos PDF con salto de línea
-    'xref',            // Referencias cruzadas PDF
-    'trailer'          // Trailer PDF
-  ]
-
-  // Verificar si contiene patrones de código binario
-  const hasBinaryPatterns = binaryPatterns.some(pattern => 
-    content.includes(pattern)
-  )
-
-  if (hasBinaryPatterns) {
-    const detectedPatterns = binaryPatterns.filter(p => content.includes(p));
-    log('error', 'DETECTADO código binario PDF - RECHAZANDO contenido', {
-      preview: content.substring(0, 200),
-      length: content.length,
-      patternsFound: detectedPatterns
-    });
-    return false
-  }
-
-  // Verificar ratio de caracteres legibles
-  const printableChars = content.match(/[a-zA-Z\u00c0-\u017f\s\d]/g) || []
-  const printableRatio = printableChars.length / content.length
-
-  if (printableRatio < 0.7) { // Al menos 70% caracteres legibles
-    log('warning', 'Ratio de caracteres legibles muy bajo', {
-      ratio: printableRatio.toFixed(2),
-      preview: content.substring(0, 100)
-    });
-    return false
-  }
-
-  // Verificar que contenga palabras comunes de CV
-  const cvKeywords = [
-    'experiencia', 'educación', 'habilidades', 'trabajo', 'empresa',
-    'universidad', 'carrera', 'estudios', 'proyecto', 'responsable',
-    'email', '@', 'teléfono', 'dirección', 'perfil', 'ingeniero',
-    'experience', 'education', 'skills', 'work', 'university'
-  ]
-
-  const hasRelevantContent = cvKeywords.some(keyword => 
-    content.toLowerCase().includes(keyword.toLowerCase())
-  )
-
-  if (!hasRelevantContent) {
-    log('warning', 'No se detectaron palabras relevantes de CV');
-  }
-
-  log('success', 'Contenido válido validado correctamente', {
-    length: content.length,
-    printableRatio: printableRatio.toFixed(2),
-    hasRelevantContent,
-    preview: content.substring(0, 150) + '...'
-  });
-
-  return true
 }
 
 /**
