@@ -254,13 +254,7 @@ export function AdminPage() {
                       
                       <div className="flex items-center justify-between">
                         <div className="text-sm text-gray-500">
-                          Última actualización: {new Date(prompt.updated_at).toLocaleDateString('es-ES', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
+                          Última actualización: {formatDate(prompt.updated_at)}
                         </div>
                         
                         <button

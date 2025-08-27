@@ -85,5 +85,5 @@ export function sanitizeContent(content: string): string {
 export function truncateContent(content: string, maxLength: number = FILE_SIZE_LIMITS.MAX_TEXT_LENGTH): string {
   if (content.length <= maxLength) return content
   
-  return content.substring(0, maxLength) + '... [contenido truncado]'
+  return content.substring(0, maxLength) + FILE_SIZE_LIMITS.TRUNCATE_MESSAGE
 }

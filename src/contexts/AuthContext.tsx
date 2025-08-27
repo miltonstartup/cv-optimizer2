@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { PROCESSING_TIMEOUTS } from '../utils/constants'
 import type { UserProfile } from '../types'
 
 interface AuthContextType {

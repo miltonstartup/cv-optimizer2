@@ -179,9 +179,10 @@ export function FileUpload({ onFileProcessed, loading, setLoading }: FileUploadP
           logger.error('💥 Error en extracción, usando fallback de emergencia', extractError)
           
           // 🆘 FALLBACK FINAL DE EMERGENCIA
-          const emergencyContent = `
+  const fallbackText = `ARCHIVO PROCESADO CON FALLBACK DE EMERGENCIA
+
 Archivo procesado: ${file.name}
-Tipo: ${file.type}
+Tipo: ${file.type || 'Desconocido'}
 Tamaño: ${(file.size / 1024).toFixed(2)} KB
 Fecha: ${new Date().toLocaleString()}
 
@@ -492,10 +493,29 @@ Para mejores resultados, intente:
               onClick={() => setShowScreenshotCapture(false)}
               className="text-yellow-400 hover:text-yellow-600 transition-colors"
             >
-              <X className="h-5 w-5" />
+Fecha: ${new Date().toLocaleString()}
+
+ERROR CRÍTICO: No se pudo extraer el contenido real del archivo.
+
+PARA EL USUARIO:
+- El sistema detectó que el archivo contiene código binario en lugar de texto
+- Por favor, asegúrese de que el PDF contiene texto seleccionable
+- Intente exportar nuevamente desde Word/Google Docs como PDF
+- Como alternativa, copie manualmente el contenido a un archivo .txt
+
+PARA DEBUGGING:
+- Todas las herramientas de extracción fallaron
+- El contenido extraído contenía patrones de código PDF binario
+- Se requiere implementar extracción del lado del servidor
             </button>
-          </div>
-        </div>
+INFORMACIÓN DEL CV ESPERADA:
+Por favor ingrese manualmente:
+- Nombre completo
+- Profesión/Título
+- Experiencia laboral
+- Educación
+- Habilidades técnicas
+- Información de contacto`;
       )}
     </div>
   )

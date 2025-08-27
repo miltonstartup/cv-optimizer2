@@ -16,7 +16,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       if (loading) {
         setShowTimeoutWarning(true)
       }
-    }, 8000) // 8 segundos
+    }, PROCESSING_TIMEOUTS.AUTH_INITIALIZATION - 2000) // 2 segundos antes del timeout de auth
 
     return () => clearTimeout(timeout)
   }, [loading])

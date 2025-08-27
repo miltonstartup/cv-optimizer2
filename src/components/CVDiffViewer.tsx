@@ -99,7 +99,7 @@ export function CVDiffViewer({ originalCV, optimizedCV, recommendations }: CVDif
       pdf.setTextColor(17, 24, 39) // Gray-900
       
       const lines = optimizedCV.split('\n')
-      const pageHeight = (pdf as any).internal.pageSize.height
+      const pageHeight = pdf.internal.pageSize.height
       const maxWidth = 170
       
       for (const line of lines) {

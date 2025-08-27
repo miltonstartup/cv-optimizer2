@@ -248,7 +248,7 @@ Para mejores resultados, intente:
       setUploadProgress(0)
       toast.error('Timeout procesando LinkedIn. Intente con captura de pantalla.')
       setShowScreenshotCapture(true)
-    }, 30000) // 30 segundos para LinkedIn
+    }, PROCESSING_TIMEOUTS.LINKEDIN_PROCESSING)
     
     try {
       const cvId = generateTempId()
