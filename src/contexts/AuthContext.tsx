@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
-import { PROCESSING_TIMEOUTS } from '../utils/constants'
 import type { UserProfile } from '../types'
 
 interface AuthContextType {
@@ -52,7 +51,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setLoading(false)
             setAuthInitialized(true)
           }
-        }, 10000) // 10 second timeout
+        }, 10000) // 10 segundos timeout
         
         // Get current session
         const { data: { session }, error } = await supabase.auth.getSession()

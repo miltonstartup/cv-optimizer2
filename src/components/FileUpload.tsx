@@ -5,7 +5,9 @@ import html2canvas from 'html2canvas'
 import { cvOperations } from '../lib/supabase'
 import { extractDocumentText, initializeDocumentExtractorLogger } from '../lib/documentExtractor'
 import { useLogger } from '../contexts/DebugContext'
+import { PROCESSING_TIMEOUTS, ACCEPTED_FILE_EXTENSIONS } from '../utils/constants'
 import { generateTempId } from '../utils/idGenerator'
+import { validateFileSize, sanitizeContent, truncateContent } from '../utils/fileValidation'
 import toast from 'react-hot-toast'
 
 interface FileUploadProps {
@@ -33,6 +35,13 @@ export function FileUpload({ onFileProcessed, loading, setLoading }: FileUploadP
     const file = acceptedFiles[0]
     if (!file) return
 
+    // Validar tamaño del archivo
+    const sizeValidation = validateFileSize(file)
+    if (!sizeValidation.isValid) {
+      toast.error(sizeValidation.error!)
+      return
+    }
+    
     logger.info('🚀 INICIANDO procesamiento robusto de archivo', {
       fileName: file.name,
       fileSize: file.size,
@@ -51,148 +60,16 @@ export function FileUpload({ onFileProcessed, loading, setLoading }: FileUploadP
       setProcessingStep('')
       setUploadProgress(0)
       toast.error('Timeout al procesar archivo. Intente de nuevo.')
-    }, 90000) // 90 segundos timeout
+    }, PROCESSING_TIMEOUTS.FILE_PROCESSING)
     
     try {
       const cvId = generateTempId()
       logger.info(`✨ ID temporal generado: ${cvId}`)
       
       if (file.type.startsWith('image/')) {
-        logger.info('🖼️ Procesando como imagen de LinkedIn')
-        setProcessingStep('Analizando imagen de LinkedIn...')
-        setUploadProgress(30)
-        
-        const reader = new FileReader()
-        reader.onloadend = async () => {
-          const imageData = reader.result as string
-          try {
-            logger.info('🧠 Enviando imagen a IA para análisis')
-            setProcessingStep('Procesando contenido con IA...')
-            setUploadProgress(60)
-            
-            const { data, error } = await cvOperations.parseLinkedInScreenshot(
-              imageData,
-              cvId,
-              file.name
-            )
-            
-            logger.info('📨 Respuesta de IA recibida', {
-              hasData: !!data,
-              hasError: !!error,
-              error: error
-            })
-            
-            if (error) {
-              logger.error(`❌ Error en análisis de imagen: ${error.message || error}`, error)
-              
-              // FALLBACK: Usar metadata como contenido mínimo
-              const fallbackContent = `Imagen de LinkedIn: ${file.name}\nTamaño: ${(file.size/1024).toFixed(2)} KB\n\n[NOTA: El análisis automático falló. Por favor, copie manualmente la información de su perfil o intente con un archivo de texto.]`
-              onFileProcessed(cvId, fallbackContent)
-              toast.error('Error al analizar imagen. Usando información básica.')
-              return
-            }
-            
-            if (data?.data) {
-              setProcessingStep('Finalizando...')
-              setUploadProgress(90)
-              
-              const parsedContent = JSON.stringify(data.data.parsedContent, null, 2)
-              logger.success('✅ Contenido extraído exitosamente', {
-                contentLength: parsedContent.length,
-                hasName: !!data.data.parsedContent?.personalInfo?.name
-              })
-              
-              onFileProcessed(cvId, parsedContent)
-              toast.success('Imagen de LinkedIn analizada correctamente')
-              setUploadProgress(100)
-            } else {
-              logger.warning('⚠️ IA no retornó datos útiles')
-              const fallbackContent = `Imagen procesada: ${file.name}\n\n[NOTA: No se pudo extraer información automáticamente. Revise la imagen manualmente.]`
-              onFileProcessed(cvId, fallbackContent)
-              toast('Imagen procesada con información limitada', { icon: '⚠️' })
-            }
-          } catch (err) {
-            logger.error('💥 Error crítico procesando imagen', err)
-            const emergencyContent = `Error procesando imagen: ${file.name}\nError: ${err instanceof Error ? err.message : 'Desconocido'}\n\n[NOTA: Procesamiento fallido. Intente con un archivo de texto.]`
-            onFileProcessed(cvId, emergencyContent)
-            toast.error('Error procesando imagen. Usando información de emergencia.')
-          }
-        }
-        reader.readAsDataURL(file)
-        
+        await processImageFile(file, cvId, logger, setProcessingStep, setUploadProgress, onFileProcessed)
       } else {
-        // 📄 PROCESAMIENTO ROBUSTO DE DOCUMENTOS
-        logger.info(`📄 Iniciando extracción robusta: ${file.type}`)
-        setProcessingStep('Extrayendo contenido con múltiples métodos...')
-        setUploadProgress(20)
-        
-        try {
-          // 🎯 USAR SISTEMA ROBUSTO DE EXTRACCIÓN
-          const extractedText = await extractDocumentText(file)
-          
-          logger.success('🎉 Extracción exitosa', {
-            textLength: extractedText.length,
-            preview: extractedText.substring(0, 150) + '...',
-            fileName: file.name,
-            hasRealContent: extractedText.length > 100
-          })
-          
-          // Validación de calidad del contenido
-          if (extractedText.length < 20) {
-            logger.warning('⚠️ Contenido muy corto, podría ser problemático')
-            toast('El contenido extraído es muy corto. Verifique el archivo.', { icon: '⚠️' })
-          }
-          
-          setProcessingStep('Enviando a análisis de IA...')
-          setUploadProgress(60)
-          
-          // Intentar análisis con IA (sin fallar si no funciona)
-          try {
-            logger.info('🤖 Enviando a IA para análisis avanzado')
-            const { data, error } = await cvOperations.parseCV(cvId, undefined, extractedText)
-            
-            if (error) {
-              logger.warning('⚠️ IA falló, usando contenido extraído directamente', error)
-            } else {
-              logger.success('✨ IA procesó el contenido exitosamente')
-            }
-          } catch (aiError) {
-            logger.warning('⚠️ Error en IA (continuando con extracción)', aiError)
-          }
-          
-          setProcessingStep('Finalizando procesamiento...')
-          setUploadProgress(90)
-          
-          // SIEMPRE usar el contenido extraído (independiente del éxito de la IA)
-          logger.success('💯 Procesamiento completado exitosamente')
-          onFileProcessed(cvId, extractedText)
-          toast.success('Archivo procesado correctamente')
-          
-          setUploadProgress(100)
-          
-        } catch (extractError) {
-          logger.error('💥 Error en extracción, usando fallback de emergencia', extractError)
-          
-          // 🆘 FALLBACK FINAL DE EMERGENCIA
-          const emergencyContent = `
-Archivo procesado: ${file.name}
-Tipo: ${file.type}
-Tamaño: ${(file.size / 1024).toFixed(2)} KB
-Fecha: ${new Date().toLocaleString()}
-
-Error en extracción: ${extractError instanceof Error ? extractError.message : 'Error desconocido'}
-
-[FALLBACK DE EMERGENCIA: El sistema no pudo extraer el contenido automáticamente. Por favor, copie manualmente el contenido de su CV o intente con un formato diferente (PDF recomendado).]
-
-Para mejores resultados, intente:
-1. Exportar el CV como PDF desde Word/Google Docs
-2. Asegurar que el PDF contiene texto seleccionable
-3. Usar archivos de texto plano (.txt) como alternativa`
-          
-          logger.info('🆘 Aplicando fallback de emergencia')
-          onFileProcessed(cvId, emergencyContent)
-          toast.error('Error extrayendo contenido. Se usó información básica del archivo.')
-        }
+        await processDocumentFile(file, cvId, logger, setProcessingStep, setUploadProgress, onFileProcessed)
       }
     } catch (criticalError) {
       logger.error('🚨 ERROR CRÍTICO en procesamiento', criticalError)
@@ -212,23 +89,177 @@ Para mejores resultados, intente:
         logger.info('🏁 Procesamiento finalizado y limpieza completada')
       }, 1500)
     }
-  }, [onFileProcessed, setLoading])
+  }, [onFileProcessed, setLoading, logger])
+
+  // Función auxiliar para procesar imágenes
+  async function processImageFile(
+    file: File, 
+    cvId: string, 
+    logger: any, 
+    setProcessingStep: (step: string) => void,
+    setUploadProgress: (progress: number) => void,
+    onFileProcessed: (cvId: string, content: string) => void
+  ) {
+    logger.info('🖼️ Procesando como imagen de LinkedIn')
+    setProcessingStep('Analizando imagen de LinkedIn...')
+    setUploadProgress(30)
+    
+    const reader = new FileReader()
+    reader.onloadend = async () => {
+      const imageData = reader.result as string
+      try {
+        logger.info('🧠 Enviando imagen a IA para análisis')
+        setProcessingStep('Procesando contenido con IA...')
+        setUploadProgress(60)
+        
+        const { data, error } = await cvOperations.parseLinkedInScreenshot(
+          imageData,
+          cvId,
+          file.name
+        )
+        
+        logger.info('📨 Respuesta de IA recibida', {
+          hasData: !!data,
+          hasError: !!error,
+          error: error
+        })
+        
+        if (error) {
+          logger.error(`❌ Error en análisis de imagen: ${error.message || error}`, error)
+          
+          // FALLBACK: Usar metadata como contenido mínimo
+          const fallbackContent = `Imagen de LinkedIn: ${file.name}\nTamaño: ${(file.size/1024).toFixed(2)} KB\n\n[NOTA: El análisis automático falló. Por favor, copie manualmente la información de su perfil o intente con un archivo de texto.]`
+          onFileProcessed(cvId, fallbackContent)
+          toast.error('Error al analizar imagen. Usando información básica.')
+          return
+        }
+        
+        if (data?.data) {
+          setProcessingStep('Finalizando...')
+          setUploadProgress(90)
+          
+          const parsedContent = JSON.stringify(data.data.parsedContent, null, 2)
+          logger.success('✅ Contenido extraído exitosamente', {
+            contentLength: parsedContent.length,
+            hasName: !!data.data.parsedContent?.personalInfo?.name
+          })
+          
+          onFileProcessed(cvId, parsedContent)
+          toast.success('Imagen de LinkedIn analizada correctamente')
+          setUploadProgress(100)
+        } else {
+          logger.warning('⚠️ IA no retornó datos útiles')
+          const fallbackContent = `Imagen procesada: ${file.name}\n\n[NOTA: No se pudo extraer información automáticamente. Revise la imagen manualmente.]`
+          onFileProcessed(cvId, fallbackContent)
+          toast('Imagen procesada con información limitada', { icon: '⚠️' })
+        }
+      } catch (err) {
+        logger.error('💥 Error crítico procesando imagen', err)
+        const emergencyContent = `Error procesando imagen: ${file.name}\nError: ${err instanceof Error ? err.message : 'Desconocido'}\n\n[NOTA: Procesamiento fallido. Intente con un archivo de texto.]`
+        onFileProcessed(cvId, emergencyContent)
+        toast.error('Error procesando imagen. Usando información de emergencia.')
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Función auxiliar para procesar documentos
+  async function processDocumentFile(
+    file: File, 
+    cvId: string, 
+    logger: any, 
+    setProcessingStep: (step: string) => void,
+    setUploadProgress: (progress: number) => void,
+    onFileProcessed: (cvId: string, content: string) => void
+  ) {
+    logger.info(`📄 Iniciando extracción robusta: ${file.type}`)
+    setProcessingStep('Extrayendo contenido con múltiples métodos...')
+    setUploadProgress(20)
+    
+    try {
+      let extractedText = await extractDocumentText(file)
+      
+      // Sanitizar y truncar contenido
+      extractedText = sanitizeContent(extractedText)
+      extractedText = truncateContent(extractedText)
+      
+      logger.success('🎉 Extracción exitosa', {
+        textLength: extractedText.length,
+        preview: extractedText.substring(0, 150) + '...',
+        fileName: file.name,
+        hasRealContent: extractedText.length > 100
+      })
+      
+      // Validación de calidad del contenido
+      if (extractedText.length < 20) {
+        logger.warning('⚠️ Contenido muy corto, podría ser problemático')
+        toast('El contenido extraído es muy corto. Verifique el archivo.', { icon: '⚠️' })
+      }
+      
+      setProcessingStep('Enviando a análisis de IA...')
+      setUploadProgress(60)
+      
+      // Intentar análisis con IA (sin fallar si no funciona)
+      try {
+        logger.info('🤖 Enviando a IA para análisis avanzado')
+        const { data, error } = await cvOperations.parseCV(cvId, undefined, extractedText)
+        
+        if (error) {
+          logger.warning('⚠️ IA falló, usando contenido extraído directamente', error)
+        } else {
+          logger.success('✨ IA procesó el contenido exitosamente')
+        }
+      } catch (aiError) {
+        logger.warning('⚠️ Error en IA (continuando con extracción)', aiError)
+      }
+      
+      setProcessingStep('Finalizando procesamiento...')
+      setUploadProgress(90)
+      
+      // SIEMPRE usar el contenido extraído (independiente del éxito de la IA)
+      logger.success('💯 Procesamiento completado exitosamente')
+      onFileProcessed(cvId, extractedText)
+      toast.success('Archivo procesado correctamente')
+      
+      setUploadProgress(100)
+      
+    } catch (extractError) {
+      logger.error('💥 Error en extracción, usando fallback de emergencia', extractError)
+      
+      // 🆘 FALLBACK FINAL DE EMERGENCIA
+      const emergencyContent = createEmergencyFallbackContent(file, extractError)
+      
+      logger.info('🆘 Aplicando fallback de emergencia')
+      onFileProcessed(cvId, emergencyContent)
+      toast.error('Error extrayendo contenido. Se usó información básica del archivo.')
+    }
+  }
+
+  // Función auxiliar para crear contenido de emergencia
+  function createEmergencyFallbackContent(file: File, error: any): string {
+    return `ARCHIVO PROCESADO CON FALLBACK DE EMERGENCIA
+
+Archivo procesado: ${file.name}
+Tipo: ${file.type || 'Desconocido'}
+Tamaño: ${(file.size / 1024).toFixed(2)} KB
+Fecha: ${new Date().toLocaleString()}
+
+Error en extracción: ${error instanceof Error ? error.message : 'Error desconocido'}
+
+[FALLBACK DE EMERGENCIA: El sistema no pudo extraer el contenido automáticamente. Por favor, copie manualmente el contenido de su CV o intente con un formato diferente (PDF recomendado).]
+
+Para mejores resultados, intente:
+1. Exportar el CV como PDF desde Word/Google Docs
+2. Asegurar que el PDF contiene texto seleccionable
+3. Usar archivos de texto plano (.txt) como alternativa`
+  }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      'application/pdf': ['.pdf'],
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-      'application/msword': ['.doc'],
-      'text/plain': ['.txt'],
-      'image/*': ['.png', '.jpg', '.jpeg', '.webp']
-    },
+    accept: ACCEPTED_FILE_EXTENSIONS,
     maxFiles: 1,
     disabled: loading
   })
-
-  // Usar función centralizada de utils
-  import { generateTempId } from '../utils/idGenerator'
 
   async function handleLinkedInUrl() {
     if (!linkedinUrl.trim()) {
@@ -303,22 +334,6 @@ Para mejores resultados, intente:
         setProcessingStep('')
         setUploadProgress(0)
       }, 1000)
-    }
-  }
-
-  async function captureScreenshot() {
-    try {
-      setLoading(true)
-      toast('Preparando captura de pantalla. Abre LinkedIn en otra pestaña.')
-      
-      // Esta funcionalidad requeriría una extensión o API del navegador
-      // Por simplicidad, mostraremos instrucciones para que el usuario suba una imagen
-      setShowScreenshotCapture(false)
-      toast('Por favor, toma una captura de pantalla del perfil de LinkedIn y súbela como imagen')
-    } catch (error) {
-      toast.error('Error al capturar pantalla')
-    } finally {
-      setLoading(false)
     }
   }
 

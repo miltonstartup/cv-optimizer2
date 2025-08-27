@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { formatDate } from '../utils/dateFormatter'
 import { Settings, Save, Edit, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { AIPrompt } from '../types'
 import toast from 'react-hot-toast'

@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { PROCESSING_TIMEOUTS } from '../utils/constants'
 
 interface ProtectedRouteProps {
   children: ReactNode
@@ -16,7 +17,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       if (loading) {
         setShowTimeoutWarning(true)
       }
-    }, PROCESSING_TIMEOUTS.AUTH_INITIALIZATION - 2000) // 2 segundos antes del timeout de auth
+    }, 8000) // 8 segundos antes del timeout de auth
 
     return () => clearTimeout(timeout)
   }, [loading])
