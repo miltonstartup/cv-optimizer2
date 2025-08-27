@@ -5,6 +5,7 @@ import html2canvas from 'html2canvas'
 import { cvOperations } from '../lib/supabase'
 import { extractDocumentText, initializeDocumentExtractorLogger } from '../lib/documentExtractor'
 import { useLogger } from '../contexts/DebugContext'
+import { generateTempId } from '../utils/idGenerator'
 import toast from 'react-hot-toast'
 
 interface FileUploadProps {
@@ -226,9 +227,8 @@ Para mejores resultados, intente:
     disabled: loading
   })
 
-  function generateTempId(): string {
-    return 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9)
-  }
+  // Usar función centralizada de utils
+  import { generateTempId } from '../utils/idGenerator'
 
   async function handleLinkedInUrl() {
     if (!linkedinUrl.trim()) {

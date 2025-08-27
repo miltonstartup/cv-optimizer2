@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { CVDiffViewer } from '../components/CVDiffViewer'
 import DebugConsole from '../components/DebugConsole'
 import { useLogger } from '../contexts/DebugContext'
+import { formatDate } from '../utils/dateFormatter'
+import { generateTempId } from '../utils/idGenerator'
 import { extractDocumentText } from '../lib/documentExtractor'
 import { 
   FileText, Upload, Zap, TrendingUp, BarChart3, Sparkles, ArrowLeft, 

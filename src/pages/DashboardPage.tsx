@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { FileUpload } from '../components/FileUpload'
+import { formatDate } from '../utils/dateFormatter'
+import { validateFileSize, sanitizeContent, truncateContent } from '../utils/fileValidation'
 import { 
   FileText, Plus, Calendar, Trash2, Edit, Eye, Upload, 
   BarChart3, Zap, CheckCircle2, Clock, Users, TrendingUp,
@@ -81,7 +83,7 @@ export function DashboardPage() {
   }
 
   // Función separada para actualizar estadísticas
-  function updateStats(cvList: CVData[]) {
+  const updateStats = useCallback((cvList: CVData[]) => {
     const totalCVs = cvList.length
     const optimizedCVs = cvList.filter(cv => cv.parsed_content)?.length || 0
     const lastUpload = totalCVs > 0 ? cvList[0].created_at : null
@@ -92,7 +94,7 @@ export function DashboardPage() {
       lastUpload,
       analysisCount: optimizedCVs
     })
-  }
+  }, [])
 
   // Función callback para manejar el éxito de la subida
   const handleUploadSuccess = (cvId?: string) => {
@@ -113,18 +115,9 @@ export function DashboardPage() {
     }
     
     try {
-      // Limpiar y validar el contenido antes de guardarlo
-      let cleanContent = content || ''
-      
-      // Remover caracteres problemáticos para PostgreSQL
-      cleanContent = cleanContent.replace(/\u0000/g, '') // Remover null bytes
-      cleanContent = cleanContent.replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '') // Remover caracteres de control
-      
-      // Limitar longitud para evitar problemas de memoria/base de datos
-      if (cleanContent.length > 1000000) { // 1MB de texto
-        cleanContent = cleanContent.substring(0, 1000000) + '... [contenido truncado]'
-        toast.success('Archivo muy grande, contenido truncado')
-      }
+      // Usar funciones centralizadas de validación
+      let cleanContent = sanitizeContent(content)
+      cleanContent = truncateContent(cleanContent)
       
       // Validar que no esté vacío después de la limpieza
       if (!cleanContent.trim()) {
@@ -191,15 +184,8 @@ export function DashboardPage() {
     }
   }
 
-  function formatDate(dateString: string) {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+  // Usar función centralizada de formateo de fechas
+  // (ya importada arriba)
 
   if (authLoading) {
     return (
