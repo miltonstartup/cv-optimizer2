@@ -6,6 +6,13 @@ export interface ValidationResult {
   warnings?: string[]
 }
 
+export interface ContentValidationOptions {
+  minLength?: number
+  checkBinaryPatterns?: boolean
+  checkRelevantContent?: boolean
+  minPrintableRatio?: number
+}
+
 export function validateFileSize(file: File): ValidationResult {
   if (!file || file.size === 0) {
     return { isValid: false, error: 'Archivo inválido o vacío' }
@@ -21,8 +28,18 @@ export function validateFileSize(file: File): ValidationResult {
   return { isValid: true }
 }
 
-export function isValidTextContent(content: string): ValidationResult {
-  if (!content || content.trim().length < FILE_SIZE_LIMITS.MIN_CONTENT_LENGTH) {
+export function isValidTextContent(
+  content: string, 
+  options: ContentValidationOptions = {}
+): ValidationResult {
+  const {
+    minLength = FILE_SIZE_LIMITS.MIN_CONTENT_LENGTH,
+    checkBinaryPatterns = true,
+    checkRelevantContent = true,
+    minPrintableRatio = 0.7
+  } = options
+
+  if (!content || content.trim().length < minLength) {
     return { 
       isValid: false, 
       error: 'Contenido muy corto o vacío',
@@ -31,16 +48,18 @@ export function isValidTextContent(content: string): ValidationResult {
   }
 
   // Verificar si contiene patrones de código binario
-  const hasBinaryPatterns = BINARY_PDF_PATTERNS.some(pattern => 
-    content.includes(pattern)
-  )
+  if (checkBinaryPatterns) {
+    const hasBinaryPatterns = BINARY_PDF_PATTERNS.some(pattern => 
+      content.includes(pattern)
+    )
 
-  if (hasBinaryPatterns) {
-    const detectedPatterns = BINARY_PDF_PATTERNS.filter(p => content.includes(p))
-    return {
-      isValid: false,
-      error: 'Contenido contiene código binario PDF',
-      warnings: [`Patrones detectados: ${detectedPatterns.join(', ')}`]
+    if (hasBinaryPatterns) {
+      const detectedPatterns = BINARY_PDF_PATTERNS.filter(p => content.includes(p))
+      return {
+        isValid: false,
+        error: 'Contenido contiene código binario PDF',
+        warnings: [`Patrones detectados: ${detectedPatterns.join(', ')}`]
+      }
     }
   }
 
@@ -48,7 +67,7 @@ export function isValidTextContent(content: string): ValidationResult {
   const printableChars = content.match(/[a-zA-Z\u00c0-\u017f\s\d]/g) || []
   const printableRatio = printableChars.length / content.length
 
-  if (printableRatio < 0.7) {
+  if (printableRatio < minPrintableRatio) {
     return {
       isValid: false,
       error: 'Ratio de caracteres legibles muy bajo',
@@ -57,13 +76,15 @@ export function isValidTextContent(content: string): ValidationResult {
   }
 
   // Verificar que contenga palabras relevantes de CV
-  const hasRelevantContent = CV_KEYWORDS.some(keyword => 
-    content.toLowerCase().includes(keyword.toLowerCase())
-  )
-
   const warnings = []
-  if (!hasRelevantContent) {
-    warnings.push('No se detectaron palabras relevantes de CV')
+  if (checkRelevantContent) {
+    const hasRelevantContent = CV_KEYWORDS.some(keyword => 
+      content.toLowerCase().includes(keyword.toLowerCase())
+    )
+
+    if (!hasRelevantContent) {
+      warnings.push('No se detectaron palabras relevantes de CV')
+    }
   }
 
   return { 

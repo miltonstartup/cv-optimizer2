@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { FileUpload } from '../components/FileUpload'
 import { formatDate } from '../utils/dateFormatter'
-import { validateFileSize, sanitizeContent, truncateContent } from '../utils/fileValidation'
+import { processContentSafely, handleProcessingError } from '../utils/processingHelpers'
 import { 
   FileText, Plus, Calendar, Trash2, Edit, Eye, Upload, 
   BarChart3, Zap, CheckCircle2, Clock, Users, TrendingUp,
@@ -115,9 +115,8 @@ export function DashboardPage() {
     }
     
     try {
-      // Usar funciones centralizadas de validación
-      let cleanContent = sanitizeContent(content)
-      cleanContent = truncateContent(cleanContent)
+      // Usar función centralizada de procesamiento
+      const cleanContent = processContentSafely(content)
       
       // Validar que no esté vacío después de la limpieza
       if (!cleanContent.trim()) {
@@ -150,16 +149,7 @@ export function DashboardPage() {
       
     } catch (error: any) {
       console.error('Error saving CV:', error)
-      const errorMessage = error?.message || error?.toString() || 'Error desconocido'
-      
-      // Mensajes de error más específicos
-      if (errorMessage.includes('Unicode')) {
-        toast.error('Error: El archivo contiene caracteres no válidos. Intenta con otro formato.')
-      } else if (errorMessage.includes('apikey')) {
-        toast.error('Error de autenticación. Recarga la página e intenta nuevamente.')
-      } else {
-        toast.error(`Error al guardar el CV: ${errorMessage}`)
-      }
+      handleProcessingError(error, 'guardado de CV')
     }
   }
 
@@ -180,12 +170,9 @@ export function DashboardPage() {
       toast.success('CV eliminado exitosamente')
     } catch (error) {
       console.error('Error deleting CV:', error)
-      toast.error('Error al eliminar el CV')
+      handleProcessingError(error, 'eliminación de CV')
     }
   }
-
-  // Usar función centralizada de formateo de fechas
-  // (ya importada arriba)
 
   if (authLoading) {
     return (
