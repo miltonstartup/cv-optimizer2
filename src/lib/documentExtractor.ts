@@ -262,19 +262,24 @@ export async function extractDocumentText(file: File): Promise<string> {
     
     try {
       const result = await extractPDFText(file);
-      if (result.text.trim() && result.text.length > 20 && isValidTextContent(result.text)) {
-        log('success', 'EXITO con PDF.js - Contenido válido extraído', {
-          method: result.method,
-          charactersExtracted: result.text.length,
-          pages: result.numPages,
-          preview: result.text.substring(0, 200) + '...'
-        });
-        return result.text;
-      } else {
-        log('warning', 'PDF.js falló validación o extrajo contenido inválido', {
-          textLength: result.text?.length || 0,
-          error: result.error
-        });
+      if (result.text.trim() && result.text.length > 20) {
+        const validation = isValidTextContent(result.text)
+        if (validation.isValid && extractedText.trim() && extractedText.length > 20) {
+          log('success', 'EXITO con PDF.js - Contenido válido extraído', {
+            method: result.method,
+            charactersExtracted: result.text.length,
+            pages: result.numPages,
+            preview: result.text.substring(0, 200) + '...'
+          });
+          return result.text;
+        } else {
+          log('warning', 'PDF.js falló validación o extrajo contenido inválido', {
+            textLength: result.text?.length || 0,
+            error: result.error,
+            validationError: validation.error,
+            warnings: validation.warnings
+          });
+        }
       }
     } catch (error) {
       log('warning', 'Extracción PDF.js falló', { error: error.message });
@@ -288,8 +293,8 @@ export async function extractDocumentText(file: File): Promise<string> {
     extractedText = await extractTextFallback(file);
     extractionMethod = 'Text Fallback';
     
-    // CRÍTICO: Validar que el contenido NO sea código binario
-    if (extractedText.trim() && extractedText.length > 10 && isValidTextContent(extractedText)) {
+    const validation = isValidTextContent(extractedText)
+    if (validation.isValid && extractedText.trim() && extractedText.length > 10) {
       log('success', 'EXITO con fallback de texto', {
         method: extractionMethod,
         charactersExtracted: extractedText.length,
@@ -297,7 +302,10 @@ export async function extractDocumentText(file: File): Promise<string> {
       });
       return extractedText;
     } else {
-      log('error', 'Fallback de texto extrajo CÓDIGO BINARIO - RECHAZANDO');
+      log('error', 'Fallback de texto falló validación', {
+        error: validation.error,
+        warnings: validation.warnings
+      });
     }
   } catch (error) {
     log('warning', 'Fallback de texto falló', { error: error.message });
@@ -354,10 +362,14 @@ export async function extractDocumentText(file: File): Promise<string> {
         });
         
         // Validar el contenido extraído del servidor
-        if (isValidTextContent(result.text)) {
+        const validation = isValidTextContent(result.text)
+        if (validation.isValid) {
           return result.text;
         } else {
-          log('warning', 'Contenido extraído del servidor falló validación');
+          log('warning', 'Contenido extraído del servidor falló validación', {
+            error: validation.error,
+            warnings: validation.warnings
+          });
         }
       } else {
         log('warning', 'Extracción del servidor retornó resultado inválido', { result });
