@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import { supabase, testSupabaseConnection } from '../lib/supabase'
 import type { UserProfile } from '../types'
 
 interface AuthContextType {
@@ -43,6 +43,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async function initializeAuth() {
       try {
         console.log('🔄 Initializing authentication...')
+        
+        // Test Supabase connection first
+        const connectionOk = await testSupabaseConnection()
+        if (!connectionOk) {
+          throw new Error('Failed to connect to Supabase')
+        }
         
         // Set a timeout to prevent infinite loading
         initTimeout = setTimeout(() => {

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { cvDatabase, handleSupabaseError } from '../utils/supabaseHelpers'
 import { useAuth } from '../contexts/AuthContext'
 import { FileUpload } from '../components/FileUpload'
 import { formatDate } from '../utils/dateFormatter'
 import { processContentSafely, handleProcessingError } from '../utils/processingHelpers'
+import { ERROR_MESSAGES } from '../utils/constants'
 import { 
   FileText, Plus, Calendar, Trash2, Edit, Eye, Upload, 
   BarChart3, Zap, CheckCircle2, Clock, Users, TrendingUp,
@@ -57,26 +58,15 @@ export function DashboardPage() {
     
     try {
       console.log('Loading CVs for user:', user.id)
-      const { data, error } = await supabase
-        .from('cvs')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+      const cvList = await cvDatabase.getByUserId(user.id)
       
-      if (error) {
-        console.error('Supabase error:', error)
-        toast.error(`Error al cargar los CVs: ${error.message}`)
-        setCvs([])
-        updateStats([])
-      } else {
-        console.log('CVs loaded successfully:', data?.length || 0)
-        const cvList = data || []
-        setCvs(cvList)
-        updateStats(cvList)
-      }
+      console.log('CVs loaded successfully:', cvList.length)
+      setCvs(cvList)
+      updateStats(cvList)
     } catch (error: any) {
       console.error('Catch error loading CVs:', error)
-      toast.error('Error de conexión al cargar los CVs')
+      const errorMessage = handleSupabaseError(error)
+      toast.error(errorMessage)
       setCvs([])
       updateStats([])
     } finally {
@@ -112,7 +102,7 @@ export function DashboardPage() {
   async function handleFileProcessed(tempCvId: string, content: string) {
     if (!user?.id) {
       console.error('User not authenticated')
-      toast.error('Usuario no autenticado. Por favor inicia sesión.')
+      toast.error(ERROR_MESSAGES.AUTH_ERROR)
       return
     }
     
@@ -126,32 +116,22 @@ export function DashboardPage() {
         return
       }
       
-      const insertData = {
+      const cvData = await cvDatabase.create({
         user_id: user.id,
         original_content: cleanContent,
         parsed_content: null
-      }
-      
-      const { data, error } = await supabase
-        .from('cvs')
-        .insert(insertData)
-        .select()
-        .single()
-      
-      if (error) {
-        console.error('Supabase error details:', error)
-        throw error
-      }
+      })
       
       // Mostrar mensaje de éxito
       toast.success('¡CV guardado exitosamente! Redirigiendo a vista previa...')
       
       // Ejecutar callback de éxito para actualizar la interfaz y navegar
-      handleUploadSuccess(data.id)
+      handleUploadSuccess(cvData.id)
       
     } catch (error: any) {
       console.error('Error saving CV:', error)
-      handleProcessingError(error, 'guardado de CV')
+      const errorMessage = handleSupabaseError(error)
+      toast.error(errorMessage)
     }
   }
 
@@ -159,12 +139,12 @@ export function DashboardPage() {
     if (!confirm('¿Estás seguro de que deseas eliminar este CV?')) return
     
     try {
-      const { error } = await supabase
-        .from('cvs')
-        .delete()
-        .eq('id', cvId)
+      if (!user?.id) {
+        toast.error(ERROR_MESSAGES.AUTH_ERROR)
+        return
+      }
       
-      if (error) throw error
+      await cvDatabase.delete(cvId, user.id)
       
       const newCvList = cvs.filter(cv => cv.id !== cvId)
       setCvs(newCvList)
@@ -172,7 +152,8 @@ export function DashboardPage() {
       toast.success('CV eliminado exitosamente')
     } catch (error) {
       console.error('Error deleting CV:', error)
-      handleProcessingError(error, 'eliminación de CV')
+      const errorMessage = handleSupabaseError(error)
+      toast.error(errorMessage)
     }
   }
 

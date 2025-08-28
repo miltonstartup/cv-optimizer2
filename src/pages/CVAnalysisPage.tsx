@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { supabase, cvOperations } from '../lib/supabase'
+import { cvOperations } from '../lib/supabase'
+import { cvDatabase, analysisDatabase, listingDatabase, handleSupabaseError } from '../utils/supabaseHelpers'
 import { useAuth } from '../contexts/AuthContext'
 import { CVDiffViewer } from '../components/CVDiffViewer'
 import DebugConsole from '../components/DebugConsole'
@@ -8,6 +9,7 @@ import { useLogger } from '../contexts/DebugContext'
 import { formatDate } from '../utils/dateFormatter'
 import { generateTempId } from '../utils/idGenerator'
 import { extractDocumentText } from '../lib/documentExtractor'
+import { ERROR_MESSAGES } from '../utils/constants'
 import { 
   FileText, Upload, Zap, TrendingUp, BarChart3, Sparkles, ArrowLeft, 
   CheckCircle2, Clock, FileDown, Eye, Brain, Target, AlertCircle,
@@ -79,20 +81,13 @@ export function CVAnalysisPage() {
     try {
       // Cargar CV
       logger.info('Consultando CV en base de datos')
-      const { data: cvData, error: cvError } = await supabase
-        .from('cvs')
-        .select('*')
-        .eq('id', cvId)
-        .eq('user_id', user.id)
-        .maybeSingle()
+      const cvData = await cvDatabase.getById(cvId, user.id)
       
       logger.info('Resultado de consulta CV', {
         hasData: !!cvData,
-        hasError: !!cvError,
-        error: cvError
+        contentLength: cvData?.original_content?.length || 0
       })
       
-      if (cvError) throw cvError
       if (!cvData) {
         logger.error('CV no encontrado o sin permisos')
         toast.error('CV no encontrado')
@@ -109,18 +104,13 @@ export function CVAnalysisPage() {
       
       // Cargar job listings
       logger.info('Consultando job listings')
-      const { data: listingsData } = await supabase
-        .from('listings')
-        .select('*')
-        .eq('cv_id', cvId)
-        .order('created_at', { ascending: false })
-        .limit(1)
+      const listingsData = await listingDatabase.getByCvId(cvId)
       
       logger.info('Job listings encontrados', {
-        count: listingsData?.length || 0
+        count: listingsData.length
       })
       
-      if (listingsData && listingsData.length > 0) {
+      if (listingsData.length > 0) {
         setJobListingFile(listingsData[0])
         setJobListing(listingsData[0].content || '')
         logger.success('Job listing cargado', {
@@ -131,18 +121,14 @@ export function CVAnalysisPage() {
       
       // Cargar análisis
       logger.info('Consultando análisis previos')
-      const { data: analysesData } = await supabase
-        .from('analyses')
-        .select('*')
-        .eq('cv_id', cvId)
-        .order('created_at', { ascending: false })
+      const analysesData = await analysisDatabase.getByCvId(cvId)
       
       logger.info('Análisis encontrados', {
-        count: analysesData?.length || 0,
-        types: analysesData?.map(a => a.analysis_type) || []
+        count: analysesData.length,
+        types: analysesData.map(a => a.analysis_type)
       })
       
-      if (analysesData) {
+      if (analysesData.length > 0) {
         setAnalyses(analysesData)
         
         // Buscar el análisis de compatibilidad más reciente
@@ -176,7 +162,8 @@ export function CVAnalysisPage() {
       }
     } catch (error) {
       logger.error('Error cargando datos del CV', error)
-      toast.error('Error al cargar los datos del CV')
+      const errorMessage = handleSupabaseError(error)
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
       
@@ -185,10 +172,10 @@ export function CVAnalysisPage() {
         logger.info('Estableciendo paso a resultados')
         setCurrentStep('results')
         // Extraer y mostrar el contenido original para vista previa
-        if (cv.original_content) {
+        if (cv?.original_content) {
           setExtractedText(cv.original_content)
         }
-      } else if (cv && cv.original_content) {
+      } else if (cv?.original_content) {
         logger.info('Estableciendo paso a vista previa')
         setCurrentStep('preview')
         setExtractedText(cv.original_content)
@@ -247,20 +234,11 @@ export function CVAnalysisPage() {
       
       // Guardar en base de datos
       logger.info('Guardando job listing en base de datos')
-      const { data: listingData, error: dbError } = await supabase
-        .from('listings')
-        .insert({
-          cv_id: cvId,
-          content: cleanContent,
-          parsed_content: data?.data?.parsedContent
-        })
-        .select()
-        .single()
-      
-      if (dbError) {
-        logger.error('Error guardando en base de datos', dbError)
-        throw dbError
-      }
+      const listingData = await listingDatabase.create({
+        cv_id: cvId,
+        content: cleanContent,
+        parsed_content: data?.data?.parsedContent
+      })
       
       logger.success('Job listing guardado exitosamente', {
         listingId: listingData.id
@@ -271,7 +249,8 @@ export function CVAnalysisPage() {
       toast.success('Oferta de trabajo procesada correctamente')
     } catch (error) {
       logger.error('Error general procesando job listing', error)
-      toast.error('Error al procesar la oferta')
+      const errorMessage = handleSupabaseError(error)
+      toast.error(errorMessage)
     }
   }
 
