@@ -33,31 +33,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  const [authInitialized, setAuthInitialized] = useState(false)
 
-  // Initialize auth once on mount
+  // Initialize auth
   useEffect(() => {
     let mounted = true
-    let initTimeout: NodeJS.Timeout
 
     async function initializeAuth() {
       try {
         console.log('🔄 Initializing authentication...')
-        
-        // Test Supabase connection first
-        const connectionOk = await testSupabaseConnection()
-        if (!connectionOk) {
-          throw new Error('Failed to connect to Supabase')
-        }
-        
-        // Set a timeout to prevent infinite loading
-        initTimeout = setTimeout(() => {
-          if (mounted && !authInitialized) {
-            console.warn('⚠️ Auth initialization timeout')
-            setLoading(false)
-            setAuthInitialized(true)
-          }
-        }, 10000) // 10 segundos timeout
         
         // Get current session
         const { data: { session }, error } = await supabase.auth.getSession()
@@ -67,9 +50,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
         
         if (mounted) {
-          clearTimeout(initTimeout)
-          
-          // Update state atomically
           setSession(session)
           setUser(session?.user || null)
           
@@ -80,9 +60,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setProfile(null)
           }
           
-          // Finalize initialization
           setLoading(false)
-          setAuthInitialized(true)
           
           console.log('✅ Auth initialized successfully', {
             hasUser: !!session?.user,
@@ -92,28 +70,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } catch (error) {
         console.error('❌ Error initializing auth:', error)
         if (mounted) {
-          clearTimeout(initTimeout)
           setLoading(false)
-          setAuthInitialized(true)
         }
       }
     }
 
-    // Only initialize if not already initialized
-    if (!authInitialized) {
-      initializeAuth()
-    }
+    initializeAuth()
 
     return () => {
       mounted = false
-      if (initTimeout) clearTimeout(initTimeout)
     }
-  }, [authInitialized]) // Depend on authInitialized to prevent multiple runs
+  }, [])
 
-  // Set up auth state change listener separately
+  // Set up auth state change listener
   useEffect(() => {
-    if (!authInitialized) return
-    
     let mounted = true
     console.log('🔄 Setting up auth state listener')
 
@@ -123,24 +93,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         if (!mounted) return
         
-        // Prevent infinite loops by checking if state actually changed
-        const currentUserId = user?.id
-        const newUserId = session?.user?.id
-        
-        if (event === 'SIGNED_IN' && currentUserId === newUserId) {
-          console.log('⏭️ Skipping duplicate SIGNED_IN event')
-          return
-        }
-        
         try {
-          // Update session and user atomically
           setSession(session)
           setUser(session?.user || null)
           
-          // Handle profile loading
-          if (session?.user && session.user.id !== currentUserId) {
+          if (session?.user) {
             await loadUserProfile(session.user.id)
-          } else if (!session?.user) {
+          } else {
             setProfile(null)
           }
           
@@ -155,7 +114,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       subscription.unsubscribe()
       console.log('🛑 Auth listener cleanup')
     }
-  }, [authInitialized, user?.id]) // Depend on authInitialized and user.id
+  }, [])
 
   async function loadUserProfile(userId: string) {
     try {

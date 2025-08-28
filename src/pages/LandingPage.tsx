@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useLogger } from '../contexts/DebugContext'
 import {
   FileText, Brain, Target, Download, CheckCircle, Star,
   ArrowRight, Zap, Shield, Eye, TrendingUp, Users,
@@ -11,12 +12,15 @@ import {
 export function LandingPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const logger = useLogger('LandingPage')
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
+    logger.info('LandingPage montada', { hasUser: !!user })
     setIsVisible(true)
     // Redirect authenticated users to dashboard
     if (user) {
+      logger.info('Usuario autenticado, redirigiendo a dashboard')
       navigate('/dashboard')
     }
   }, [user, navigate])

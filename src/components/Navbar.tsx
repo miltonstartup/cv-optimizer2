@@ -1,17 +1,22 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useLogger } from '../contexts/DebugContext'
 import { FileText, Settings, LogOut, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function Navbar() {
   const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
+  const logger = useLogger('Navbar')
 
   async function handleSignOut() {
+    logger.info('Iniciando cierre de sesión')
     const { error } = await signOut()
     if (error) {
+      logger.error('Error al cerrar sesión', error)
       toast.error('Error al cerrar sesión')
     } else {
+      logger.success('Sesión cerrada exitosamente')
       toast.success('Sesión cerrada exitosamente')
       navigate('/login')
     }
