@@ -1,7 +1,13 @@
 // Utilidades para operaciones con Supabase
 import { supabase } from '../lib/supabase'
-import { SUPABASE_CONFIG, ERROR_MESSAGES } from './constants'
+import { ERROR_MESSAGES } from './constants'
 import type { CVData, JobListing, Analysis, UserProfile } from '../types'
+
+const SUPABASE_CONFIG = {
+  MAX_RETRIES: 3,
+  RETRY_DELAY: 1000,
+  TIMEOUT: 30000
+}
 
 // Función para reintentar operaciones de Supabase
 export async function retrySupabaseOperation<T>(

@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { cvDatabase, handleSupabaseError } from '../utils/supabaseHelpers'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { FileUpload } from '../components/FileUpload'
 import { formatDate } from '../utils/dateFormatter'
-import { processContentSafely, handleProcessingError } from '../utils/processingHelpers'
+import { processContentSafely } from '../utils/processingHelpers'
 import { ERROR_MESSAGES } from '../utils/constants'
 import { 
   FileText, Plus, Calendar, Trash2, Edit, Eye, Upload, 
@@ -22,6 +22,21 @@ export function DashboardPage() {
   const [uploadLoading, setUploadLoading] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [stats, setStats] = useState({
+
+  // Función para manejar errores de Supabase
+  function handleSupabaseError(error: any): string {
+    if (!error) return ERROR_MESSAGES.SUPABASE_ERROR
+    
+    if (error.message?.includes('fetch')) {
+      return ERROR_MESSAGES.NETWORK_ERROR
+    }
+    
+    if (error.message?.includes('JWT') || error.message?.includes('auth')) {
+      return ERROR_MESSAGES.AUTH_ERROR
+    }
+    
+    return error.message || ERROR_MESSAGES.SUPABASE_ERROR
+  }
     totalCVs: 0,
     optimizedCVs: 0,
     lastUpload: null as string | null,
@@ -58,11 +73,19 @@ export function DashboardPage() {
     
     try {
       console.log('Loading CVs for user:', user.id)
-      const cvList = await cvDatabase.getByUserId(user.id)
+      const { data: cvList, error } = await supabase
+        .from('cvs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      
+      const cvData = cvList || []
       
       console.log('CVs loaded successfully:', cvList.length)
-      setCvs(cvList)
-      updateStats(cvList)
+      setCvs(cvData)
+      updateStats(cvData)
     } catch (error: any) {
       console.error('Catch error loading CVs:', error)
       const errorMessage = handleSupabaseError(error)
@@ -116,17 +139,23 @@ export function DashboardPage() {
         return
       }
       
-      const cvData = await cvDatabase.create({
+      const { data: cvData, error } = await supabase
+        .from('cvs')
+        .insert({
         user_id: user.id,
         original_content: cleanContent,
         parsed_content: null
-      })
+        })
+        .select()
+        .single()
+      
+      if (error) throw error
       
       // Mostrar mensaje de éxito
       toast.success('¡CV guardado exitosamente! Redirigiendo a vista previa...')
       
       // Ejecutar callback de éxito para actualizar la interfaz y navegar
-      handleUploadSuccess(cvData.id)
+      handleUploadSuccess(cvData?.id)
       
     } catch (error: any) {
       console.error('Error saving CV:', error)
@@ -144,7 +173,13 @@ export function DashboardPage() {
         return
       }
       
-      await cvDatabase.delete(cvId, user.id)
+      const { error } = await supabase
+        .from('cvs')
+        .delete()
+        .eq('id', cvId)
+        .eq('user_id', user.id)
+      
+      if (error) throw error
       
       const newCvList = cvs.filter(cv => cv.id !== cvId)
       setCvs(newCvList)

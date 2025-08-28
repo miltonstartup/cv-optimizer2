@@ -51,13 +51,6 @@ export const FILE_SIZE_LIMITS = {
   TRUNCATE_MESSAGE: '... [contenido truncado]'
 } as const
 
-// Configuración de Supabase
-export const SUPABASE_CONFIG = {
-  MAX_RETRIES: 3,
-  RETRY_DELAY: 1000,
-  TIMEOUT: 30000
-} as const
-
 // Mensajes de error estandarizados
 export const ERROR_MESSAGES = {
   NETWORK_ERROR: 'Error de conexión. Verifica tu conexión a internet.',

@@ -1,20 +1,65 @@
 import { useCallback, useState, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Upload, FileText, Image, X, Camera, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
-import html2canvas from 'html2canvas'
 import { cvOperations } from '../lib/supabase'
 import { extractDocumentText, initializeDocumentExtractorLogger } from '../lib/documentExtractor'
 import { useLogger } from '../contexts/DebugContext'
 import { PROCESSING_TIMEOUTS, ACCEPTED_FILE_EXTENSIONS } from '../utils/constants'
 import { generateTempId } from '../utils/idGenerator'
 import { validateFileSize } from '../utils/fileValidation'
-import { 
-  processFileWithTimeout, 
-  createEmergencyFallbackContent, 
-  processContentSafely,
-  handleProcessingError 
-} from '../utils/processingHelpers'
+import { processContentSafely } from '../utils/processingHelpers'
 import toast from 'react-hot-toast'
+
+// Función para crear contenido de fallback
+function createEmergencyFallbackContent(file: File, error: any, additionalInfo?: string): string {
+  return `ARCHIVO PROCESADO CON FALLBACK DE EMERGENCIA
+
+Archivo procesado: ${file.name}
+Tipo: ${file.type || 'Desconocido'}
+Tamaño: ${(file.size / 1024).toFixed(2)} KB
+Fecha: ${new Date().toLocaleString()}
+
+Error en extracción: ${error instanceof Error ? error.message : 'Error desconocido'}
+
+${additionalInfo || ''}
+
+[FALLBACK DE EMERGENCIA: El sistema no pudo extraer el contenido automáticamente. Por favor, copie manualmente el contenido de su CV o intente con un formato diferente (PDF recomendado).]`
+}
+
+// Función para manejar errores de procesamiento
+function handleProcessingError(error: any, context: string): void {
+  console.error(`Error en ${context}:`, error)
+  
+  const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+  
+  if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
+    toast.error('Timeout al procesar archivo. Intente de nuevo.')
+  } else {
+    toast.error(`Error en ${context}: ${errorMessage}`)
+  }
+}
+
+// Función para procesar con timeout
+async function processFileWithTimeout<T>(
+  processingFunction: () => Promise<T>,
+  timeout: number = PROCESSING_TIMEOUTS.FILE_PROCESSING
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Timeout en procesamiento de archivo'))
+    }, timeout)
+
+    processingFunction()
+      .then(result => {
+        clearTimeout(timeoutId)
+        resolve(result)
+      })
+      .catch(error => {
+        clearTimeout(timeoutId)
+        reject(error)
+      })
+  })
+}
 
 interface FileUploadProps {
   onFileProcessed: (cvId: string, content: string) => void
@@ -73,9 +118,9 @@ export function FileUpload({ onFileProcessed, loading, setLoading }: FileUploadP
     try {
       await processFileWithTimeout(async () => {
         if (file.type.startsWith('image/')) {
-          await processImageFile(file, cvId, logger, setProcessingStep, setUploadProgress, onFileProcessed)
+          await processImageFile(file, cvId)
         } else {
-          await processDocumentFile(file, cvId, logger, setProcessingStep, setUploadProgress, onFileProcessed)
+          await processDocumentFile(file, cvId)
         }
       }, { timeout: PROCESSING_TIMEOUTS.FILE_PROCESSING })
       
@@ -99,14 +144,7 @@ export function FileUpload({ onFileProcessed, loading, setLoading }: FileUploadP
   }, [logger, onFileProcessed, setLoading])
 
   // Función auxiliar para procesar imágenes
-  async function processImageFile(
-    file: File, 
-    cvId: string, 
-    logger: any, 
-    setProcessingStep: (step: string) => void,
-    setUploadProgress: (progress: number) => void,
-    onFileProcessed: (cvId: string, content: string) => void
-  ) {
+  async function processImageFile(file: File, cvId: string) {
     logger.info('🖼️ Procesando como imagen de LinkedIn')
     setProcessingStep('Analizando imagen de LinkedIn...')
     setUploadProgress(30)
@@ -174,14 +212,7 @@ export function FileUpload({ onFileProcessed, loading, setLoading }: FileUploadP
   }
 
   // Función auxiliar para procesar documentos
-  async function processDocumentFile(
-    file: File, 
-    cvId: string, 
-    logger: any, 
-    setProcessingStep: (step: string) => void,
-    setUploadProgress: (progress: number) => void,
-    onFileProcessed: (cvId: string, content: string) => void
-  ) {
+  async function processDocumentFile(file: File, cvId: string) {
     logger.info(`📄 Iniciando extracción robusta: ${file.type}`)
     setProcessingStep('Extrayendo contenido con múltiples métodos...')
     setUploadProgress(20)

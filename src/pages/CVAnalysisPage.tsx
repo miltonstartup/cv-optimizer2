@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { cvOperations } from '../lib/supabase'
-import { cvDatabase, analysisDatabase, listingDatabase, handleSupabaseError } from '../utils/supabaseHelpers'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { CVDiffViewer } from '../components/CVDiffViewer'
 import DebugConsole from '../components/DebugConsole'
@@ -45,6 +45,21 @@ export function CVAnalysisPage() {
   // Logger para debugging
   const logger = useLogger('CVAnalysisPage');
 
+  // Función para manejar errores de Supabase
+  function handleSupabaseError(error: any): string {
+    if (!error) return 'Error del servidor'
+    
+    if (error.message?.includes('fetch')) {
+      return 'Error de conexión. Verifica tu conexión a internet.'
+    }
+    
+    if (error.message?.includes('JWT') || error.message?.includes('auth')) {
+      return 'Error de autenticación. Por favor inicia sesión nuevamente.'
+    }
+    
+    return error.message || 'Error del servidor'
+  }
+
   useEffect(() => {
     logger.info('Componente montado', { cvId, userId: user?.id })
     
@@ -81,7 +96,14 @@ export function CVAnalysisPage() {
     try {
       // Cargar CV
       logger.info('Consultando CV en base de datos')
-      const cvData = await cvDatabase.getById(cvId, user.id)
+      const { data: cvData, error: cvError } = await supabase
+        .from('cvs')
+        .select('*')
+        .eq('id', cvId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      
+      if (cvError) throw cvError
       
       logger.info('Resultado de consulta CV', {
         hasData: !!cvData,
@@ -104,13 +126,19 @@ export function CVAnalysisPage() {
       
       // Cargar job listings
       logger.info('Consultando job listings')
-      const listingsData = await listingDatabase.getByCvId(cvId)
+      const { data: listingsData, error: listingsError } = await supabase
+        .from('listings')
+        .select('*')
+        .eq('cv_id', cvId)
+        .order('created_at', { ascending: false })
+      
+      if (listingsError) throw listingsError
       
       logger.info('Job listings encontrados', {
-        count: listingsData.length
+        count: listingsData?.length || 0
       })
       
-      if (listingsData.length > 0) {
+      if (listingsData && listingsData.length > 0) {
         setJobListingFile(listingsData[0])
         setJobListing(listingsData[0].content || '')
         logger.success('Job listing cargado', {
@@ -121,14 +149,20 @@ export function CVAnalysisPage() {
       
       // Cargar análisis
       logger.info('Consultando análisis previos')
-      const analysesData = await analysisDatabase.getByCvId(cvId)
+      const { data: analysesData, error: analysesError } = await supabase
+        .from('analyses')
+        .select('*')
+        .eq('cv_id', cvId)
+        .order('created_at', { ascending: false })
+      
+      if (analysesError) throw analysesError
       
       logger.info('Análisis encontrados', {
-        count: analysesData.length,
-        types: analysesData.map(a => a.analysis_type)
+        count: analysesData?.length || 0,
+        types: analysesData?.map(a => a.analysis_type) || []
       })
       
-      if (analysesData.length > 0) {
+      if (analysesData && analysesData.length > 0) {
         setAnalyses(analysesData)
         
         // Buscar el análisis de compatibilidad más reciente
@@ -234,14 +268,20 @@ export function CVAnalysisPage() {
       
       // Guardar en base de datos
       logger.info('Guardando job listing en base de datos')
-      const listingData = await listingDatabase.create({
+      const { data: listingData, error: insertError } = await supabase
+        .from('listings')
+        .insert({
         cv_id: cvId,
         content: cleanContent,
         parsed_content: data?.data?.parsedContent
-      })
+        })
+        .select()
+        .single()
+      
+      if (insertError) throw insertError
       
       logger.success('Job listing guardado exitosamente', {
-        listingId: listingData.id
+        listingId: listingData?.id
       })
       
       setJobListingFile(listingData)

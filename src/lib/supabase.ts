@@ -4,12 +4,6 @@ import type { Database } from '../types/database'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-// Verificar que las variables estén definidas
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Supabase configuration missing!')
-  throw new Error('Supabase URL or Anon Key is missing. Check your .env file.')
-}
-
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
@@ -29,7 +23,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 // Función para verificar la conexión
 export async function testSupabaseConnection() {
   try {
-    const { data, error } = await supabase.from('profiles').select('count').limit(1)
+    const { data, error } = await supabase.from('profiles').select('id').limit(1)
     if (error) throw error
     console.log('✅ Supabase connection successful')
     return true
