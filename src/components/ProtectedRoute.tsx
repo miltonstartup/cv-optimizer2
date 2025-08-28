@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading } = useAuth()
+  const { user, loading, authInitialized } = useAuth()
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false)
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
   }, [loading])
 
-  if (loading) {
+  if (loading || !authInitialized) { // Wait until auth is initialized
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>

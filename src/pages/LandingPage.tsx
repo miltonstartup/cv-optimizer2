@@ -12,13 +12,13 @@ import {
 export function LandingPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const logger = useLogger('LandingPage')
+  const logger = useLogger('LandingPage') // Keep logger for debugging
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
     logger.info('LandingPage montada', { hasUser: !!user })
     setIsVisible(true)
-    // Redirect authenticated users to dashboard
+    // Redirect authenticated users to dashboard only if user is loaded
     if (user) {
       logger.info('Usuario autenticado, redirigiendo a dashboard')
       navigate('/dashboard')

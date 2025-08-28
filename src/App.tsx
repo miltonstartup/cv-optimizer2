@@ -16,7 +16,7 @@ import { LandingPage } from './pages/LandingPage'
 import { useLogger } from './contexts/DebugContext'
 
 function AppContent() {
-  const logger = useLogger('App')
+  const logger = useLogger('App') // Keep logger for debugging
   
   return (
     <Router>
