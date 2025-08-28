@@ -6,6 +6,7 @@ import { FileUpload } from '../components/FileUpload'
 import { formatDate } from '../utils/dateFormatter'
 import { processContentSafely } from '../utils/processingHelpers'
 import { ERROR_MESSAGES } from '../utils/constants'
+import { handleSupabaseError } from '../utils/supabaseHelpers'
 import { 
   FileText, Plus, Calendar, Trash2, Edit, Eye, Upload, 
   BarChart3, Zap, CheckCircle2, Clock, Users, TrendingUp,
@@ -23,20 +24,6 @@ export function DashboardPage() {
   const [showUpload, setShowUpload] = useState(false)
   const [stats, setStats] = useState({
 
-  // Función para manejar errores de Supabase
-  function handleSupabaseError(error: any): string {
-    if (!error) return ERROR_MESSAGES.SUPABASE_ERROR
-    
-    if (error.message?.includes('fetch')) {
-      return ERROR_MESSAGES.NETWORK_ERROR
-    }
-    
-    if (error.message?.includes('JWT') || error.message?.includes('auth')) {
-      return ERROR_MESSAGES.AUTH_ERROR
-    }
-    
-    return error.message || ERROR_MESSAGES.SUPABASE_ERROR
-  }
     totalCVs: 0,
     optimizedCVs: 0,
     lastUpload: null as string | null,
