@@ -93,6 +93,10 @@ export function CVAnalysisPage() {
     
     logger.info(`Cargando datos del CV: ${cvId}`, { userId: user.id })
     setLoading(true)
+    let fetchedCvData: any = null;
+    let fetchedAnalysesData: any = null;
+    let fetchedCurrentAnalysis: any = null;
+    
     try {
       // Cargar CV
       logger.info('Consultando CV en base de datos')
@@ -111,18 +115,24 @@ export function CVAnalysisPage() {
       })
       
       if (!cvData) {
-        logger.error('CV no encontrado o sin permisos')
+        logger.error('CV no encontrado o sin permisos', {
+          cvId: cvId,
+          userId: user.id,
+          cvError: cvError,
+          cvData: cvData
+        })
         toast.error('CV no encontrado')
         navigate('/dashboard')
         return
       }
       
+      fetchedCvData = cvData; // Store fetched data
       logger.success('CV cargado exitosamente', {
-        cvId: cvData.id,
-        hasContent: !!cvData.original_content,
-        contentLength: cvData.original_content?.length || 0
+        cvId: fetchedCvData.id,
+        hasContent: !!fetchedCvData.original_content, // Ensure this is correct
+        contentLength: fetchedCvData.original_content?.length || 0
       })
-      setCv(cvData)
+      setCv(fetchedCvData)
       
       // Cargar job listings
       logger.info('Consultando job listings')
@@ -157,18 +167,20 @@ export function CVAnalysisPage() {
       
       if (analysesError) throw analysesError
       
+      fetchedAnalysesData = analysesData; // Store fetched data
       logger.info('Análisis encontrados', {
-        count: analysesData?.length || 0,
-        types: analysesData?.map(a => a.analysis_type) || []
+        count: fetchedAnalysesData?.length || 0,
+        types: fetchedAnalysesData?.map(a => a.analysis_type) || []
       })
       
-      if (analysesData && analysesData.length > 0) {
-        setAnalyses(analysesData)
+      if (fetchedAnalysesData && fetchedAnalysesData.length > 0) {
+        setAnalyses(fetchedAnalysesData)
         
         // Buscar el análisis de compatibilidad más reciente
-        const latestAnalysis = analysesData.find(a => a.analysis_type === 'compatibility')
+        const latestAnalysis = fetchedAnalysesData.find(a => a.analysis_type === 'compatibility')
         if (latestAnalysis) {
-          setCurrentAnalysis(latestAnalysis.result_json)
+          fetchedCurrentAnalysis = latestAnalysis.result_json;
+          setCurrentAnalysis(fetchedCurrentAnalysis)
           logger.success('Análisis de compatibilidad encontrado', {
             analysisId: latestAnalysis.id,
             score: latestAnalysis.result_json?.compatibilityScore
@@ -176,7 +188,7 @@ export function CVAnalysisPage() {
         }
         
         // Buscar recomendaciones
-        const latestRecommendations = analysesData.find(a => a.analysis_type === 'recommendations')
+        const latestRecommendations = fetchedAnalysesData.find(a => a.analysis_type === 'recommendations')
         if (latestRecommendations) {
           setRecommendations(latestRecommendations.result_json.recommendations)
           logger.success('Recomendaciones encontradas', {
@@ -185,7 +197,7 @@ export function CVAnalysisPage() {
         }
         
         // Buscar resúmenes
-        const latestSummaries = analysesData.find(a => a.analysis_type === 'summary_generation')
+        const latestSummaries = fetchedAnalysesData.find(a => a.analysis_type === 'summary_generation')
         if (latestSummaries) {
           setSummaries(latestSummaries.result_json.summaries)
           logger.success('Resúmenes encontrados', {
@@ -201,18 +213,18 @@ export function CVAnalysisPage() {
     } finally {
       setLoading(false)
       
-      // Determinar el paso actual basado en los datos
-      if (analyses.length > 0 && currentAnalysis) {
+      // Determinar el paso actual basado en los datos recién obtenidos
+      if (fetchedAnalysesData && fetchedAnalysesData.length > 0 && fetchedCurrentAnalysis) {
         logger.info('Estableciendo paso a resultados')
         setCurrentStep('results')
-        // Extraer y mostrar el contenido original para vista previa
+        // If we have results, we still want to show the original content for diffing
         if (cv?.original_content) {
           setExtractedText(cv.original_content)
         }
-      } else if (cv?.original_content) {
+      } else if (fetchedCvData?.original_content) {
         logger.info('Estableciendo paso a vista previa')
         setCurrentStep('preview')
-        setExtractedText(cv.original_content)
+        setExtractedText(fetchedCvData.original_content)
       } else {
         logger.info('Estableciendo paso a configuración')
         setCurrentStep('upload')
@@ -568,7 +580,7 @@ export function CVAnalysisPage() {
               </p>
             </div>
           </div>
-        </div>
+        </div> {/* End of header */}
         
         <div className="space-y-6">
           {/* Estadísticas del contenido */}
@@ -626,16 +638,16 @@ export function CVAnalysisPage() {
                   showFullPreview ? 'rotate-180' : ''
                 }`} />
               </button>
-            </div>
-            <div className="p-6">
+            </div> {/* End of header for content */}
+            <div className="p-6 bg-gray-50 rounded-b-xl"> {/* Added bg-gray-50 and rounded-b-xl */}
               <div className={`whitespace-pre-wrap text-sm text-gray-700 font-mono leading-relaxed ${
                 !showFullPreview ? 'max-h-96 overflow-hidden' : ''
               }`}>
-                {extractedText || 'No se pudo extraer contenido del archivo'}
+                {extractedText || 'No se pudo extraer contenido del archivo. Por favor, intenta con un archivo diferente o copia y pega el texto manualmente.'}
               </div>
               {!showFullPreview && extractedText.length > 1000 && (
-                <div className="mt-4 text-center">
-                  <div className="bg-gradient-to-t from-white to-transparent h-8 -mt-8 relative z-10" />
+                <div className="mt-4 text-center"> {/* Added bg-gradient-to-t from-gray-50 */}
+                  <div className="bg-gradient-to-t from-gray-50 to-transparent h-8 -mt-8 relative z-10" /> {/* Adjusted from-white to from-gray-50 */}
                   <button
                     onClick={() => setShowFullPreview(true)}
                     className="relative z-20 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
@@ -650,6 +662,10 @@ export function CVAnalysisPage() {
           {/* Verificaciones de calidad */}
           <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
             <h3 className="font-semibold text-gray-900 mb-4">Verificación de Calidad</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Estas verificaciones te ayudan a asegurar que el contenido extraído es adecuado para el análisis de IA.
+              Si hay advertencias, considera subir un archivo diferente o ajustar el contenido.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center space-x-3">
                 {extractedText.length > 100 ? (
@@ -657,7 +673,7 @@ export function CVAnalysisPage() {
                 ) : (
                   <AlertCircle className="h-5 w-5 text-red-500" />
                 )}
-                <span className={`text-sm ${
+                <span className={`text-sm ${ // Added character count
                   extractedText.length > 100 ? 'text-green-700' : 'text-red-700'
                 }`}>
                   Longitud adecuada
@@ -669,7 +685,7 @@ export function CVAnalysisPage() {
                 ) : (
                   <AlertCircle className="h-5 w-5 text-yellow-500" />
                 )}
-                <span className={`text-sm ${
+                <span className={`text-sm ${ // Added relevant info
                   /\b(experiencia|educación|habilidades|trabajo|email|@|teléfono)\b/i.test(extractedText) 
                     ? 'text-green-700' 
                     : 'text-yellow-700'
@@ -683,7 +699,7 @@ export function CVAnalysisPage() {
                 ) : (
                   <AlertCircle className="h-5 w-5 text-red-500" />
                 )}
-                <span className={`text-sm ${
+                <span className={`text-sm ${ // Added binary check
                   !extractedText.includes('%PDF-') && !extractedText.includes('/Type/Catalog')
                     ? 'text-green-700' 
                     : 'text-red-700'
@@ -697,7 +713,7 @@ export function CVAnalysisPage() {
                 ) : (
                   <AlertCircle className="h-5 w-5 text-yellow-500" />
                 )}
-                <span className={`text-sm ${
+                <span className={`text-sm ${ // Added significant words
                   extractedText.split(/\s+/).filter(word => word.length > 2).length > 50
                     ? 'text-green-700' 
                     : 'text-yellow-700'
@@ -720,7 +736,7 @@ export function CVAnalysisPage() {
             
             <div className="flex items-center space-x-3">
               {extractedText.length < 100 && (
-                <div className="flex items-center space-x-2 text-sm text-yellow-600 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
+                <div className="flex items-center space-x-2 text-sm text-yellow-600 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200"> {/* Added warning for short content */}
                   <AlertCircle className="h-4 w-4" />
                   <span>El contenido es muy corto. Considera subir un archivo diferente.</span>
                 </div>
@@ -728,436 +744,4 @@ export function CVAnalysisPage() {
               
               <button
                 onClick={() => setCurrentStep('upload')}
-                className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-              >
-                <Play className="h-5 w-5" />
-                <span>Continuar al Análisis</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
-
-  if (!cv) {
-    return (
-      <div className="text-center py-12">
-        <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">CV no encontrado</h2>
-        <p className="text-gray-600">El CV que buscas no existe o no tienes permisos para verlo.</p>
-      </div>
-    )
-  }
-
-  const originalCV = cv.original_content || 'Contenido del CV no disponible'
-  const optimizedCV = recommendations 
-    ? generateOptimizedCV(originalCV, recommendations)
-    : originalCV
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="mb-8">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Volver al Dashboard</span>
-        </button>
-        
-        {/* Header mejorado */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl mb-4">
-            <FileText className="h-8 w-8 text-white" />
-          </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Optimizador de CV
-          </h1>
-          <p className="text-xl text-gray-600">
-            Mejora tu currículum con inteligencia artificial
-          </p>
-        </div>
-        
-        {/* Stepper de progreso */}
-        {renderProgressStepper()}
-      </div>
-
-      {/* Contenido basado en el paso actual */}
-      {currentStep === 'preview' && renderPreviewStep()}
-      {currentStep === 'analyzing' && renderAnalyzingStep()}
-      
-      {currentStep === 'upload' && (
-        <div className="max-w-4xl mx-auto space-y-8">
-          {/* Sección de configuración */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Upload className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Configurar Análisis</h2>
-                <p className="text-gray-600">Personaliza tu análisis de CV con una oferta de trabajo específica</p>
-              </div>
-            </div>
-            
-            {/* Oferta de trabajo opcional */}
-            <div className="space-y-6">
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
-                <div className="flex items-start space-x-3 mb-4">
-                  <Target className="h-6 w-6 text-blue-600 mt-1" />
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      Oferta de Trabajo (Opcional)
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-4">
-                      Proporciona una descripción de la oferta para obtener un análisis más preciso y recomendaciones específicas.
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <textarea
-                    value={jobListing}
-                    onChange={(e) => setJobListing(e.target.value)}
-                    placeholder="Pega aquí la descripción completa de la oferta de trabajo...\n\nEjemplo:\nTítulo: Desarrollador Frontend Senior\nEmpresa: Tech Company\nRequisitos: React, TypeScript, 3+ años de experiencia...\nResponsabilidades: Desarrollar interfaces de usuario, colaborar con el equipo..."
-                    className="w-full h-40 px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
-                  />
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <span className="text-sm text-gray-500">O sube un archivo:</span>
-                      <label className="flex items-center space-x-2 cursor-pointer group">
-                        <div className="p-2 bg-blue-100 group-hover:bg-blue-200 rounded-lg transition-colors">
-                          <Upload className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <span className="text-sm text-blue-600 hover:text-blue-800 font-medium">Seleccionar archivo</span>
-                        <input
-                          type="file"
-                          accept=".txt,.pdf,.docx,.doc"
-                          onChange={handleJobListingUpload}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                    
-                    {jobListing.trim() && (
-                      <div className="flex items-center space-x-2 text-sm text-green-600">
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span>Oferta configurada</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Botón de inicio de análisis */}
-              <div className="flex items-center justify-center pt-6">
-                <button
-                  onClick={runAnalysis}
-                  disabled={analysisLoading}
-                  className="flex items-center space-x-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 transform hover:scale-105 disabled:scale-100 shadow-lg hover:shadow-xl"
-                >
-                  {analysisLoading ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  ) : (
-                    <Play className="h-6 w-6" />
-                  )}
-                  <span>{analysisLoading ? 'Iniciando análisis...' : 'Comenzar Análisis IA'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {currentStep === 'results' && (
-        <div className="space-y-8">
-          {/* Header de resultados */}
-          <div className="text-center bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-8 border border-green-200">
-            <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="h-10 w-10 text-white" />
-            </div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">¡Análisis Completado!</h2>
-            <p className="text-lg text-gray-600 mb-6">
-              Tu CV ha sido optimizado con inteligencia artificial
-            </p>
-            <div className="flex items-center justify-center space-x-4">
-              <button
-                onClick={() => setCurrentStep('upload')}
-                className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <RefreshCw className="h-4 w-4" />
-                <span>Nuevo Análisis</span>
-              </button>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-            <div className="xl:col-span-2 space-y-8">
-              {/* Comparación diff */}
-              {recommendations && (
-                <CVDiffViewer
-                  originalCV={originalCV}
-                  optimizedCV={optimizedCV}
-                  recommendations={recommendations}
-                />
-              )}
-            </div>
-
-            <div className="space-y-6">
-              {/* Análisis de compatibilidad */}
-              {currentAnalysis?.analysis_result && (
-                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-                  <div className="flex items-center space-x-3 mb-6">
-                    <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-500 rounded-xl flex items-center justify-center">
-                      <BarChart3 className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-bold text-gray-900">Análisis de Compatibilidad</h3>
-                      <p className="text-gray-600">Evaluación detallada de tu CV</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-6">
-                    {/* Puntuación principal */}
-                    <div className="text-center bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 border border-blue-100">
-                      <div className="text-5xl font-bold text-blue-600 mb-2">
-                        {currentAnalysis.analysis_result.puntuacion_compatibilidad}%
-                      </div>
-                      <p className="text-lg font-medium text-gray-700 mb-4">Puntuación de Compatibilidad</p>
-                      <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-                        <div
-                          className="bg-gradient-to-r from-blue-500 to-blue-600 h-4 rounded-full transition-all duration-1000 ease-out"
-                          style={{ width: `${currentAnalysis.analysis_result.puntuacion_compatibilidad}%` }}
-                        />
-                      </div>
-                    </div>
-                    
-                    {/* Fortalezas y áreas de mejora */}
-                    <div className="grid md:grid-cols-2 gap-6">
-                      {currentAnalysis.analysis_result.fortalezas_principales?.length > 0 && (
-                        <div className="bg-green-50 rounded-xl p-6 border border-green-200">
-                          <h4 className="font-bold text-green-900 mb-4 flex items-center">
-                            <TrendingUp className="h-5 w-5 text-green-600 mr-2" />
-                            Fortalezas Identificadas
-                          </h4>
-                          <ul className="space-y-3">
-                            {currentAnalysis.analysis_result.fortalezas_principales.map((strength, index) => (
-                              <li key={index} className="flex items-start space-x-3">
-                                <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <span className="text-green-800 text-sm">{strength}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      
-                      {currentAnalysis.analysis_result.areas_de_mejora?.length > 0 && (
-                        <div className="bg-orange-50 rounded-xl p-6 border border-orange-200">
-                          <h4 className="font-bold text-orange-900 mb-4 flex items-center">
-                            <Sparkles className="h-5 w-5 text-orange-600 mr-2" />
-                            Oportunidades de Mejora
-                          </h4>
-                          <ul className="space-y-3">
-                            {currentAnalysis.analysis_result.areas_de_mejora.map((area, index) => (
-                              <li key={index} className="flex items-start space-x-3">
-                                <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
-                                <span className="text-orange-800 text-sm">{area}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Resúmenes generados */}
-              {summaries?.resumenes && (
-                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-                  <div className="flex items-center space-x-3 mb-6">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-purple-500 rounded-xl flex items-center justify-center">
-                      <FileText className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-bold text-gray-900">Resúmenes Profesionales</h3>
-                      <p className="text-gray-600">Opciones generadas por IA para tu CV</p>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    {summaries.resumenes.map((resumen: string, index: number) => (
-                      <div key={index} className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-6 border border-purple-100">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-lg font-semibold text-gray-900">Opción {index + 1}</h4>
-                          <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
-                            Recomendado
-                          </span>
-                        </div>
-                        <p className="text-gray-700 leading-relaxed">{resumen}</p>
-                        <div className="mt-4 flex space-x-2">
-                          <button 
-                            onClick={() => {
-                              navigator.clipboard.writeText(resumen)
-                              toast.success('Resumen copiado al portapapeles')
-                            }}
-                            className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs rounded-lg transition-colors"
-                          >
-                            Copiar
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Componente de debugging - ÚLTIMO ELEMENTO */}
-      <DebugConsole />
-    </div>
-  )
-}
-
-function generateOptimizedCV(originalCV: string, recommendations: any): string {
-  if (!recommendations) {
-    return originalCV;
-  }
-
-  let optimizedCV = originalCV;
-  const lines = originalCV.split('\n');
-  const optimizedLines: string[] = [];
-  
-  // Agregar resumen profesional al inicio si está disponible
-  if (recommendations.resumen_profesional_sugerido) {
-    optimizedLines.push('RESUMEN PROFESIONAL');
-    optimizedLines.push('=' + '='.repeat('RESUMEN PROFESIONAL'.length - 1));
-    optimizedLines.push('');
-    optimizedLines.push(recommendations.resumen_profesional_sugerido);
-    optimizedLines.push('');
-    optimizedLines.push('=' + '='.repeat(50));
-    optimizedLines.push('');
-  }
-  
-  // Procesar líneas del CV original manteniendo estructura
-  let inExperienceSection = false;
-  let inSkillsSection = false;
-  
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
-    const lowerLine = line.toLowerCase();
-    
-    // Detectar secciones
-    if (lowerLine.includes('experiencia') || lowerLine.includes('experience')) {
-      inExperienceSection = true;
-      inSkillsSection = false;
-    } else if (lowerLine.includes('habilidades') || lowerLine.includes('skills') || 
-               lowerLine.includes('competencias')) {
-      inSkillsSection = true;
-      inExperienceSection = false;
-    } else if (lowerLine.includes('educación') || lowerLine.includes('education') ||
-               lowerLine.includes('formación')) {
-      inExperienceSection = false;
-      inSkillsSection = false;
-    }
-    
-    // Aplicar mejoras específicas según la sección
-    if (inExperienceSection && recommendations.experiencia_laboral_mejorada) {
-      // Buscar coincidencias en experiencia laboral mejorada
-      for (const exp of recommendations.experiencia_laboral_mejorada) {
-        if (line.toLowerCase().includes(exp.empresa?.toLowerCase() || '') || 
-            line.toLowerCase().includes(exp.puesto?.toLowerCase() || '')) {
-          if (exp.descripcion_mejorada) {
-            // Mantener la línea original pero agregar descripción mejorada
-            optimizedLines.push(line);
-            optimizedLines.push('   • ' + exp.descripcion_mejorada);
-            continue;
-          }
-        }
-      }
-    }
-    
-    // Mejorar sección de habilidades
-    if (inSkillsSection && recommendations.habilidades_a_destacar) {
-      if (line.trim() && !line.startsWith('•') && !line.includes(':')) {
-        // Agregar habilidades destacadas
-        optimizedLines.push(line);
-        recommendations.habilidades_a_destacar.forEach((skill: string) => {
-          if (!originalCV.toLowerCase().includes(skill.toLowerCase())) {
-            optimizedLines.push('• ' + skill);
-          }
-        });
-        continue;
-      }
-    }
-    
-    // Aplicar mejoras de palabras clave
-    if (recommendations.palabras_clave_a_incluir && line.trim()) {
-      let enhancedLine = line;
-      
-      // Insertar palabras clave relevantes naturalmente
-      recommendations.palabras_clave_a_incluir.forEach((keyword: string) => {
-        if (!line.toLowerCase().includes(keyword.toLowerCase())) {
-          // Agregar palabra clave si la línea parece relevante
-          if (lowerLine.includes('responsabilidades') || lowerLine.includes('funciones') ||
-              lowerLine.includes('logros') || lowerLine.includes('achievements')) {
-            enhancedLine = line + ' (' + keyword + ')';
-          }
-        }
-      });
-      
-      line = enhancedLine;
-    }
-    
-    optimizedLines.push(line);
-  }
-  
-  // Agregar sección de mejoras sugeridas al final
-  if (recommendations.recomendaciones_específicas && recommendations.recomendaciones_específicas.length > 0) {
-    optimizedLines.push('');
-    optimizedLines.push('=' + '='.repeat(50));
-    optimizedLines.push('MEJORAS APLICADAS POR IA');
-    optimizedLines.push('=' + '='.repeat(50));
-    optimizedLines.push('');
-    
-    recommendations.recomendaciones_específicas.forEach((rec: string, index: number) => {
-      optimizedLines.push(`${index + 1}. ${rec}`);
-    });
-    
-    if (recommendations.habilidades_a_destacar && recommendations.habilidades_a_destacar.length > 0) {
-      optimizedLines.push('');
-      optimizedLines.push('HABILIDADES DESTACADAS:');
-      recommendations.habilidades_a_destacar.forEach((skill: string) => {
-        optimizedLines.push('• ' + skill);
-      });
-    }
-    
-    if (recommendations.palabras_clave_a_incluir && recommendations.palabras_clave_a_incluir.length > 0) {
-      optimizedLines.push('');
-      optimizedLines.push('PALABRAS CLAVE OPTIMIZADAS:');
-      optimizedLines.push(recommendations.palabras_clave_a_incluir.join(', '));
-    }
-  }
-  
-  // Unir las líneas manteniendo el formato
-  optimizedCV = optimizedLines.join('\n');
-  
-  // Limpiar espacios excesivos pero mantener estructura
-  optimizedCV = optimizedCV
-    .replace(/\n{4,}/g, '\n\n\n')  // Máximo 3 líneas vacías
-    .replace(/[ \t]+$/gm, '')     // Remover espacios al final de líneas
-    .trim();                      // Remover espacios al inicio y final
-  
-  return optimizedCV;
-}
+                className="flex items
