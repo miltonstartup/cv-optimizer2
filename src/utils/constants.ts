@@ -1,6 +1,6 @@
 // Constantes compartidas para evitar duplicación
 export const PROCESSING_TIMEOUTS = {
-  FILE_PROCESSING: 90000, // 90 segundos
+  FILE_PROCESSING: 180000, // 180 segundos (3 minutos)
   LINKEDIN_PROCESSING: 30000, // 30 segundos
   AUTH_INITIALIZATION: 10000, // 10 segundos
   CV_LOADING: 15000, // 15 segundos
