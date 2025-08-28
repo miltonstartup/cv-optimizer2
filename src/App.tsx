@@ -22,6 +22,7 @@ function App() {
           <div className="min-h-screen bg-gray-50">
             <Navbar />
             <main className="container mx-auto px-4 py-8">
+              <div className="min-h-[60vh]">
               <Routes>
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
@@ -50,7 +51,9 @@ function App() {
                   }
                 />
                 <Route path="/" element={<LandingPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
+              </div>
             </main>
             <Toaster
               position="top-right"

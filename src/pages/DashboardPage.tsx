@@ -56,6 +56,7 @@ export function DashboardPage() {
     setLoading(true)
     
     try {
+      console.log('Loading CVs for user:', user.id)
       const { data, error } = await supabase
         .from('cvs')
         .select('*')
@@ -68,6 +69,7 @@ export function DashboardPage() {
         setCvs([])
         updateStats([])
       } else {
+        console.log('CVs loaded successfully:', data?.length || 0)
         const cvList = data || []
         setCvs(cvList)
         updateStats(cvList)

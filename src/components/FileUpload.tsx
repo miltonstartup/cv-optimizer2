@@ -59,17 +59,25 @@ export function FileUpload({ onFileProcessed, loading, setLoading }: FileUploadP
     setProcessingStep('Iniciando procesamiento...')
     setUploadProgress(10)
     
+    const cvId = generateTempId()
+    
     // CRÍTICO: Timeout para evitar loading infinito
     const processingTimeout = setTimeout(() => {
       logger.error('⏱️ TIMEOUT en procesamiento de archivo')
       setLoading(false)
+      setProcessingStep('')
+      setUploadProgress(0)
+      toast.error('Timeout en procesamiento de archivo')
+    }, PROCESSING_TIMEOUTS.FILE_PROCESSING)
+    
+    try {
       await processFileWithTimeout(async () => {
         if (file.type.startsWith('image/')) {
           await processImageFile(file, cvId, logger, setProcessingStep, setUploadProgress, onFileProcessed)
         } else {
           await processDocumentFile(file, cvId, logger, setProcessingStep, setUploadProgress, onFileProcessed)
         }
-      })
+      }, { timeout: PROCESSING_TIMEOUTS.FILE_PROCESSING })
       
     } catch (criticalError) {
       logger.error('🚨 ERROR CRÍTICO en procesamiento', criticalError)
@@ -80,6 +88,7 @@ export function FileUpload({ onFileProcessed, loading, setLoading }: FileUploadP
       onFileProcessed(emergencyId, emergencyContent)
       handleProcessingError(criticalError, 'procesamiento de archivo')
     } finally {
+      clearTimeout(processingTimeout)
       setTimeout(() => {
         setLoading(false)
         setProcessingStep('')
@@ -87,6 +96,10 @@ export function FileUpload({ onFileProcessed, loading, setLoading }: FileUploadP
         logger.info('🏁 Procesamiento finalizado y limpieza completada')
       }, 1500)
     }
+  }, [logger, onFileProcessed, setLoading])
+
+  // Función auxiliar para procesar imágenes
+  async function processImageFile(
     file: File, 
     cvId: string, 
     logger: any, 

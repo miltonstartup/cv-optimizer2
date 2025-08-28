@@ -102,7 +102,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       mounted = false
       if (initTimeout) clearTimeout(initTimeout)
     }
-  }, []) // Empty dependency array - only run once
+  }, [authInitialized]) // Depend on authInitialized to prevent multiple runs
 
   // Set up auth state change listener separately
   useEffect(() => {
